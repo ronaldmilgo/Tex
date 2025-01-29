@@ -54,7 +54,8 @@ typedef enum{
 } input_state;
 
 
-str *read_file(const char *filename) {
+
+str* read_file(const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("File opening failed");
@@ -89,10 +90,43 @@ str *read_file(const char *filename) {
     return input;
 }
 
+// Function to handle input (either from stdin or file)
+str* read_input(FILE *input_stream) {
+    str *input = calloc(1, sizeof(str));
+    if (!input) {
+        perror("Memory allocation failed for input structure");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t buffer_size = MAX_INPUT_SIZE;
+    input->arr = calloc(buffer_size, sizeof(char));
+    input->capacity = buffer_size;
+
+    if (!input->arr) {
+        perror("Memory allocation failed for input buffer");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t i = 0;
+    char ch;
+    while ((ch = fgetc(input_stream)) != EOF) {
+        if (i >= input->capacity) {
+            input->capacity *= 2;
+            input->arr = realloc(input->arr, input->capacity);
+            if (!input->arr) {
+                perror("Memory allocation failed during buffer resize");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        input->arr[i++] = ch;
+    }
+
+    input->size = i;
+    return input;
+}
 
 int main(int argc, char **argv) {
-    // freopen("output.txt", "w", stdout);
-
     // Allocate memory for input structure
     str *input = calloc(1, sizeof(str));
     if (!input) {
@@ -100,112 +134,51 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    // If no file arguments are provided, accept input from the user interactively
+    // Handle file or stdin input
     if (argc == 1) {
-        size_t buffer_size = MAX_INPUT_SIZE;
-        input->arr = calloc(buffer_size, sizeof(char));  // Dynamically allocate buffer for user input
-        input->capacity = buffer_size;
-
-        if (!input->arr) {
-            perror("Memory allocation failed for input buffer\n");
-            return EXIT_FAILURE;
-        }
-
-        bool input_received = false;  // Flag to track whether any input has been received
-
-        while (1) {
-            // Allocate a temporary buffer to read user input
-            char *line_buffer = malloc(MAX_INPUT_SIZE);
-            if (!line_buffer) {
-                perror("Memory allocation failed for line buffer\n");
-                exit(EXIT_FAILURE);
-            }
-
-            if (fgets(line_buffer, MAX_INPUT_SIZE, stdin) == NULL) {
-                free(line_buffer);
-                break;  // End input if there is an error or EOF
-            }
-
-            // Check if the user just pressed Enter (empty input)
-            if (strlen(line_buffer) == 1) {
-                free(line_buffer);
-                if (input_received) {
-                    break;  // End input if the user pressed Enter after typing something
-                }
-                continue;  // Skip and ask for input again if nothing is entered
-            }
-
-            input_received = true;  // Mark that input was received
-
-            // Calculate the required space
-            size_t line_len = strlen(line_buffer);
-            size_t new_size = input->size + line_len;
-
-            // If necessary, expand the input array
-            if (new_size >= input->capacity) {
-                // Double the capacity if we run out of space
-                input->capacity = new_size * 2;
-                input->arr = realloc(input->arr, input->capacity);
-                if (!input->arr) {
-                    perror("Memory allocation failed for input array\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-
-            // Append the user input to the main input array
-            memcpy(input->arr + input->size, line_buffer, line_len); // Copy new content
-            input->size += line_len; // Update the size to reflect the new content
-            input->arr[input->size] = '\0';  // Ensure null termination
-
-            free(line_buffer);  // Clean up the temporary line buffer
-        }
-
-        if (!input_received) {
-            free(input->arr);
-            free(input);
-            return EXIT_FAILURE;  // Return early if no input was provided
-        }
+        // If no file is provided, check for stdin redirection
+        str *new_input = read_input(stdin);  // Use your read_input function to handle stdin
+        free(input->arr);  // Free the old input's array
+        free(input);       // Free the old input structure
+        input = new_input; // Assign the new input to the old one
     } else {
+        // Process file inputs
         for (int i = 1; i < argc; i++) {
             str *read = read_file(argv[i]);
-
-            if (read->size == 0) {
-                continue;  // Skip empty files and continue with the next file
-            }
 
             size_t updated_size = input->size + read->size;
             if (updated_size > input->capacity) {
                 input->capacity = updated_size * 2;
-                input->arr = realloc(input->arr, sizeof(char) * input->capacity);
+                input->arr = realloc(input->arr, input->capacity);
                 if (!input->arr) {
                     perror("Memory allocation failed for input->arr\n");
                     exit(EXIT_FAILURE);
                 }
             }
-            strncpy(input->arr + input->size, read->arr, read->size);
+
+            memcpy(input->arr + input->size, read->arr, read->size);
             input->size = updated_size;
             input->arr[input->size] = '\0';
 
             free(read->arr);
             free(read);
         }
-
-        if (input->size == 0) {
-            free(input->arr);
-            free(input);
-            return EXIT_FAILURE;  // Return early if no content was loaded from files
-        }
     }
 
-    reverse_str(input->arr);  // Reverse if required
-    char *expanded = expand(input);  // Assume `expand` works with the `str` type
+    // Ensure proper memory management after reading input
+    if (input->size > 0) {
+        if (input->arr != NULL && strlen(input->arr) > 0) {
+            reverse_str(input->arr);
+        }
+        char *expanded = expand(input);
+        printf("%s", expanded);  // Output the expanded result
+        free(expanded);  // Free the allocated memory for the expanded string
+    }
 
-    printf("%s", expanded);  // Output the expanded result
-
+    // Free allocated memory for input structure and its array
     free(input->arr);
-    free(input);
-    free(expanded);
-    free_macro_list();  // Clean up any macro list if required
+    free(input);  // This frees the memory allocated for the input structure
+    free_macro_list();
 
     return 0;
 }
@@ -448,8 +421,8 @@ char *include_macro(const char *path) {
 
 //state machine
 char *expand(str *input){
-    size_t input_len = input->size;
-    size_t expanded_size = input_len + 1;
+    int input_len = input->size;
+    int expanded_size = input_len + 1;
     char *expanded = calloc(expanded_size, sizeof(char));
     if (!expanded){
         perror("Memory alloc failed for expanded.");
@@ -510,7 +483,8 @@ char *expand(str *input){
                 break;
 
             case MACRO:
-                size_t name_start = i;
+                {
+                int name_start = i;
 
                 while (i >= 0 && isalnum(input->arr[i])){
                     if(i == 0) break;
@@ -554,23 +528,49 @@ char *expand(str *input){
                     //get the macro value
                     char *macro_val = extract_macro_value(macro_name);
                     
-                    
+                    bool did_not_reach_end = false;
                     if (macro_val){
                         i--;//move to start of arg
                         size_t arg_start = i;
                         size_t arg_brace = 1;
-                        while (input->arr[i] != '\0'){
-                            if (input->arr[i] == '}'){
-                                arg_brace--;
-                            }else if(input->arr[i] == '{'){
+                        while (input->arr[i] != '\0') {
+                            if (input->arr[i] == '\\') {
+                                size_t backslash_count = 0;
+                                while (i >= 0 && input->arr[i] == '\\') {
+                                    backslash_count++;
+                                    i--;
+                                }
+                                
+                                if (backslash_count % 2 == 0) {
+                                    if (input->arr[i] == '{') {
+                                        arg_brace++; 
+                                    } else if (input->arr[i] == '}') {
+                                        arg_brace--;  
+                                    }
+                                } else {
+                                    
+                                }
+
+                            } else if (input->arr[i] == '{') {
                                 arg_brace++;
-                            }if(arg_brace == 0){
+                            } else if (input->arr[i] == '}') {
+                                arg_brace--;
+                            }
+
+                            // If braces are balanced, break the loop
+                            if (arg_brace == 0) {
                                 break;
                             }
-                            i--;
+
+                            if (i == 0) {
+                                did_not_reach_end = true;
+                                break;
+                            }
+                            i--;  // Move backward to process the next character
                         }
 
-                        if(input->arr[i] != '}'){
+
+                        if((did_not_reach_end && i >= 0)|| input->arr[i] != '}'){
                             DIE("expected }, found '%#x'", input->arr[i]);
                         }
 
@@ -592,7 +592,9 @@ char *expand(str *input){
                             resize(input);
                             input->size += added_length;
                         }
+                        // printf("BEFORE, %i\n", i);
                         for(size_t x = 0; x < expanded_length; x++){
+                            // printf("After, %i\n", i);
                             input->arr[i] = expanded_macro_val[x];
                             i++;
                         }
@@ -607,6 +609,7 @@ char *expand(str *input){
                     state = NORMAL;
                 }
                 break;
+                }
             
             case DEF:
                 if(input->arr[i] != '{'){
@@ -617,24 +620,50 @@ char *expand(str *input){
 
                 size_t def_name_start = i;
 
+                bool def_did_not_reach_end = false;
                 int defname_brace_count = 1; // To track brace balancing
+
                 while (input->arr[i] != '\0') {
-                if (input->arr[i] == '{') {
-                    defname_brace_count++;
-                } else if (input->arr[i] == '}') {
-                    defname_brace_count--;
-                }
-                if (defname_brace_count == 0) {
-                    break;
-                }
-                i--;
+                    if (input->arr[i] == '\\') {
+                        size_t backslash_count = 0;
+                        while (i >= 0 && input->arr[i] == '\\') {
+                            backslash_count++;
+                            i--;
+                        }
+                        
+                        if (backslash_count % 2 == 0) {
+                            if (input->arr[i] == '{') {
+                                defname_brace_count++; 
+                            } else if (input->arr[i] == '}') {
+                                defname_brace_count--;  
+                            }
+                        } else {
+                            //do nothing
+                        }
+
+                    // {escape\{}
+                    } else if (input->arr[i] == '{') {
+                        defname_brace_count++;
+                    } else if (input->arr[i] == '}') {
+                        defname_brace_count--;
+                    }
+
+                   
+                    if (defname_brace_count == 0) {
+                        break;
+                    }
+
+                    if (i == 0) {
+                        def_did_not_reach_end = true;
+                        break;
+                    }
+                    i--;  
                 }
 
-                // // Check if we encounter a non-alphanumeric character (e.g., {, }, etc.)
-                // if (input->arr[i] != '}' && !isalnum(input->arr[i])) {
-                //     fprintf(stderr, "m15: '%#x' is not alphanumeric\n", input->arr[i]);
-                //     exit(EXIT_FAILURE);  // Stop execution and report the error
-                // }
+                
+                if(def_did_not_reach_end || input->arr[i] != '}'){
+                    DIE("expected }, found '%#x'", input->arr[i]);
+                }
                 size_t def_name_len = def_name_start - i;
                 char *name = calloc((def_name_len + 1), sizeof(char));
                 if(!name){
@@ -664,30 +693,56 @@ char *expand(str *input){
                 i--;
                size_t value_start = i;
 
+                bool _def_did_not_reach_end = false;
                int brace_count = 1; // To track brace balancing
-               while (input->arr[i] != '\0') {
-                if (input->arr[i] == '{') {
-                    brace_count++;
-                } else if (input->arr[i] == '}') {
-                    brace_count--;
+                
+                while (input->arr[i] != '\0') {
+                    if (input->arr[i] == '\\') {
+                        size_t backslash_count = 0;
+                        while (i >= 0 && input->arr[i] == '\\') {
+                            backslash_count++;
+                            i--;
+                        }
+                        
+                        if (backslash_count % 2 == 0) {
+                            if (input->arr[i] == '{') {
+                                brace_count++; 
+                            } else if (input->arr[i] == '}') {
+                                brace_count--;  
+                            }
+                        } else {
+                            //do nothing
+                        }
+
+                       
+                    } else if (input->arr[i] == '{') {
+                        brace_count++;
+                    } else if (input->arr[i] == '}') {
+                        brace_count--;
+                    }
+
+                   
+                    if (brace_count == 0) {
+                        break;
+                    }
+
+                    if (i == 0) {
+                        _def_did_not_reach_end = true;
+                        break;
+                    }
+                    i--;  
                 }
-                if (brace_count == 0) {
-                    break;
-                }
-                i--;
+
+
+
+                if(_def_did_not_reach_end || input->arr[i] != '}'){
+                    DIE("expected }, found '%#x", input->arr[i]);
                 }
 
             //    while (input[i] != '}'){
             //     i++;
             //    }
                size_t value_len = value_start - i;
-            //    i--; //skip closing }
-            //    size_t x = 0;
-            //    while (x < input->size - i - j){
-            //     strcat(expanded, " ");
-            //     x++;
-            //    }
-            //    j += x;
 
                char *value = calloc((value_len + 1), sizeof(char));
                if(!value){
@@ -743,26 +798,53 @@ char *expand(str *input){
                 break;
 
             case IF:
-            if(input->arr[i] != '{'){
+                if(input->arr[i] != '{'){
                     DIE("expected {, found '%#x'", input->arr[i]);
                 }
                 i--;
 
                 size_t cond_start = i;
 
+
                 size_t if_brace = 1;
-                while (input->arr[i] != '\0'){
-                    if (input->arr[i] == '}'){
-                        if_brace--;
-                    }else if(input->arr[i] == '{'){
+                bool cond_did_not_reach_end = false;
+                while (input->arr[i] != '\0') {
+                    if (input->arr[i] == '\\') {
+                        size_t backslash_count = 0;
+                        while (i >= 0 && input->arr[i] == '\\') {
+                            backslash_count++;
+                            i--;
+                        }
+                        
+                        if (backslash_count % 2 == 0) {
+                            if (input->arr[i] == '{') {
+                                if_brace++; 
+                            } else if (input->arr[i] == '}') {
+                               if_brace--;  
+                            }
+                        } else {
+                            //do nothing
+                        }
+
+                    // {escape\{}
+                    } else if (input->arr[i] == '{') {
                         if_brace++;
-                    }if(if_brace == 0){
+                    } else if (input->arr[i] == '}') {
+                        if_brace--;
+                    }
+
+                   
+                    if (if_brace == 0) {
                         break;
                     }
-                    i--;
-                }
 
-                if (input->arr[i] == '\0'){
+                    if (i == 0) {
+                        cond_did_not_reach_end = true;
+                        break;
+                    }
+                    i--;  
+                }
+                if (cond_did_not_reach_end || input->arr[i] == '\0'){
                     DIE("expected }, found '%#x'", input->arr[i]);
                 }
 
@@ -785,19 +867,47 @@ char *expand(str *input){
                 size_t then_start = i;
 
                 size_t then_brace = 1;
-                while (input->arr[i] != '\0'){
-                    if (input->arr[i] == '}'){
+                bool then_did_not_reach_end = false;
+
+                while (input->arr[i] != '\0') {
+                    if (input->arr[i] == '\\') {
+                        size_t backslash_count = 0;
+                        while (i >= 0 && input->arr[i] == '\\') {
+                            backslash_count++;
+                            i--;
+                        }
+                        
+                        if (backslash_count % 2 == 0) {
+                            if (input->arr[i] == '{') {
+                                then_brace++; 
+                            } else if (input->arr[i] == '}') {
+                                then_brace--;  
+                            }
+                        } else {
+                            //do nothing
+                        }
+
+                    // {escape\{}
+                    } else if (input->arr[i] == '{') {
+                       then_brace++;
+                    } else if (input->arr[i] == '}') {
                         then_brace--;
-                    }else if(input->arr[i] == '{'){
-                        then_brace++;
-                    }if(then_brace == 0){
+                    }
+
+                   
+                    if (then_brace == 0) {
                         break;
                     }
-                    i--;
+
+                    if (i == 0) {
+                        then_did_not_reach_end = true;
+                        break;
+                    }
+                    i--;  
                 }
 
-                if (input->arr[i] == '\0'){
-                    DIE("expected }, found '%#x'\n", input->arr[i]);
+                if (then_did_not_reach_end || input->arr[i] == '\0'){
+                    DIE("expected }, found '%#x'", input->arr[i]);
                 }
 
                 size_t then_len = then_start - i;
@@ -820,18 +930,45 @@ char *expand(str *input){
                 size_t else_start = i;
 
                 size_t else_brace = 1;
+                bool else_did_not_reach_end = false;
                 while (input->arr[i] != '\0'){
-                    if (input->arr[i] == '}'){
+                    if (input->arr[i] == '\\') {
+                            size_t backslash_count = 0;
+                            while (i >= 0 && input->arr[i] == '\\') {
+                                backslash_count++;
+                                i--;
+                            }
+                            
+                            if (backslash_count % 2 == 0) {
+                                if (input->arr[i] == '{') {
+                                    else_brace++; 
+                                } else if (input->arr[i] == '}') {
+                                    else_brace--;  
+                                }
+                            } else {
+                                //do nothing
+                            }
+
+                        // {escape\{}
+                        } else if (input->arr[i] == '{') {
+                            else_brace++;
+                        } else if (input->arr[i] == '}') {
                         else_brace--;
-                    }else if(input->arr[i] == '{'){
-                        else_brace++;
-                    }if(else_brace == 0){
-                        break;
-                    }
-                    i--;
+                        }
+
+                    
+                        if (else_brace == 0) {
+                            break;
+                        }
+
+                        if (i == 0) {
+                            else_did_not_reach_end = true;
+                            break;
+                        }
+                        i--;  
                 }
 
-                if (input->arr[i] == '\0'){
+                if (else_did_not_reach_end || input->arr[i] == '\0'){
                     DIE("expected }, found '%#x'", input->arr[i]);
                 }
                 size_t else_len = else_start - i;
@@ -882,12 +1019,12 @@ char *expand(str *input){
                     i--;
                 }
                 if (input->arr[i] != '}' && !isalnum(input->arr[i])) {
-                    DIE("'%#x' is not alphanumeric\n", input->arr[i]);
+                    DIE("'%#x' is not alphanumeric", input->arr[i]);
                 }
 
                 size_t ifdef_name_len = ifdef_name_start - i;
                 char *ifdef_macro_name = calloc((ifdef_name_len + 1), sizeof(char));
-                if(!name){
+                if(!ifdef_macro_name){
                     perror("malloc for name failed");
                     exit(EXIT_FAILURE);
                 }
@@ -908,15 +1045,46 @@ char *expand(str *input){
 
                 size_t ifdef_then_start = i;
                 int ifdef_brace_count = 1; // To track brace balancing
-                while (input->arr[i] != '\0') {
-                    if (input->arr[i] == '{') {
-                        ifdef_brace_count++;
-                    } else if (input->arr[i] == '}') {
-                        ifdef_brace_count--;
-                    }if (ifdef_brace_count == 0) {
-                        break;
-                    }
-                    i--;
+                bool _ifdef_did_not_reach_end = false;
+               while (input->arr[i] != '\0'){
+                    if (input->arr[i] == '\\') {
+                            size_t backslash_count = 0;
+                            while (i >= 0 && input->arr[i] == '\\') {
+                                backslash_count++;
+                                i--;
+                            }
+                            
+                            if (backslash_count % 2 == 0) {
+                                if (input->arr[i] == '{') {
+                                   ifdef_brace_count++; 
+                                } else if (input->arr[i] == '}') {
+                                   ifdef_brace_count--;  
+                                }
+                            } else {
+                                //do nothing
+                            }
+
+                        // {escape\{}
+                        } else if (input->arr[i] == '{') {
+                            ifdef_brace_count++;
+                        } else if (input->arr[i] == '}') {
+                            ifdef_brace_count--;
+                        }
+
+                    
+                        if (ifdef_brace_count == 0) {
+                            break;
+                        }
+
+                        if (i == 0) {
+                            _ifdef_did_not_reach_end = true;
+                            break;
+                        }
+                        i--;  
+                }
+
+                if(_ifdef_did_not_reach_end || input->arr[i] == '\0'){
+                    DIE("expected }, found '%#x'", input->arr[i]);
                 }
 
                 size_t ifdef_then_len = ifdef_then_start - i;
@@ -938,15 +1106,45 @@ char *expand(str *input){
 
                 size_t ifdef_else_start = i;
                 int ifdef_brace_count2 = 1; // To track brace balancing
-                while (input->arr[i] != '\0') {
-                    if (input->arr[i] == '{') {
-                        ifdef_brace_count2++;
-                    } else if (input->arr[i] == '}') {
-                        ifdef_brace_count2--;
-                    }if (ifdef_brace_count2 == 0) {
-                        break;
-                    }
-                    i--;
+                bool ifdef_did_not_reach_end = false;
+                while (input->arr[i] != '\0'){
+                    if (input->arr[i] == '\\') {
+                            size_t backslash_count = 0;
+                            while (i >= 0 && input->arr[i] == '\\') {
+                                backslash_count++;
+                                i--;
+                            }
+                            
+                            if (backslash_count % 2 == 0) {
+                                if (input->arr[i] == '{') {
+                                   ifdef_brace_count2++; 
+                                } else if (input->arr[i] == '}') {
+                                   ifdef_brace_count2--;  
+                                }
+                            } else {
+                                //do nothing
+                            }
+
+                        // {escape\{}
+                        } else if (input->arr[i] == '{') {
+                            ifdef_brace_count2++;
+                        } else if (input->arr[i] == '}') {
+                            ifdef_brace_count2--;
+                        }
+
+                    
+                        if (ifdef_brace_count2 == 0) {
+                            break;
+                        }
+
+                        if (i == 0) {
+                            ifdef_did_not_reach_end = true;
+                            break;
+                        }
+                        i--;  
+                }
+                if(ifdef_did_not_reach_end || input->arr[i] == '\0'){
+                    DIE("expected }, found '%#x'", input->arr[i]);
                 }
 
                 size_t ifdef_else_len = ifdef_else_start - i;
@@ -1004,15 +1202,45 @@ char *expand(str *input){
 
                 size_t path_start = i;
                 int path_brace_count = 1; // To track brace balancing
-                while (input->arr[i] != '\0') {
-                    if (input->arr[i] == '{') {
-                        path_brace_count++;
-                    } else if (input->arr[i] == '}') {
-                        path_brace_count--;
-                    }if (path_brace_count == 0) {
-                        break;
-                    }
-                    i--;
+                bool path_did_not_reach_end = false;
+                while (input->arr[i] != '\0'){
+                    if (input->arr[i] == '\\') {
+                            size_t backslash_count = 0;
+                            while (i >= 0 && input->arr[i] == '\\') {
+                                backslash_count++;
+                                i--;
+                            }
+                            
+                            if (backslash_count % 2 == 0) {
+                                if (input->arr[i] == '{') {
+                                   path_brace_count++; 
+                                } else if (input->arr[i] == '}') {
+                                  path_brace_count--;  
+                                }
+                            } else {
+                                //do nothing
+                            }
+
+                        // {escape\{}
+                        } else if (input->arr[i] == '{') {
+                            path_brace_count++;
+                        } else if (input->arr[i] == '}') {
+                            path_brace_count--;
+                        }
+
+                    
+                        if (path_brace_count == 0) {
+                            break;
+                        }
+
+                        if (i == 0) {
+                            path_did_not_reach_end = true;
+                            break;
+                        }
+                        i--;  
+                }
+                if (path_did_not_reach_end || input->arr[i] != '}'){
+                    DIE("expected }, found '%#x'", input->arr[i]);
                 }
 
                 size_t path_len = path_start - i;
@@ -1060,18 +1288,45 @@ char *expand(str *input){
                 size_t before_start = i;
 
                 size_t before_brace = 1;
+                bool expand_did_not_reach_end = false;
                 while (input->arr[i] != '\0'){
-                    if (input->arr[i] == '}'){
-                        before_brace--;
-                    }else if(input->arr[i] == '{'){
-                        before_brace++;
-                    }if(before_brace == 0){
-                        break;
-                    }
-                    i--;
+                    if (input->arr[i] == '\\') {
+                            size_t backslash_count = 0;
+                            while (i >= 0 && input->arr[i] == '\\') {
+                                backslash_count++;
+                                i--;
+                            }
+                            
+                            if (backslash_count % 2 == 0) {
+                                if (input->arr[i] == '{') {
+                                   before_brace++; 
+                                } else if (input->arr[i] == '}') {
+                                  before_brace--;  
+                                }
+                            } else {
+                                //do nothing
+                            }
+
+                        // {escape\{}
+                        } else if (input->arr[i] == '{') {
+                            before_brace++;
+                        } else if (input->arr[i] == '}') {
+                            before_brace--;
+                        }
+
+                    
+                        if (before_brace == 0) {
+                            break;
+                        }
+
+                        if (i == 0) {
+                            expand_did_not_reach_end = true;
+                            break;
+                        }
+                        i--;  
                 }
 
-                if (input->arr[i] != '}'){
+                if (expand_did_not_reach_end || input->arr[i] != '}'){
                     DIE("expected }, found '%#x'", input->arr[i]);
                 }
                 size_t before_len = before_start - i;
@@ -1093,18 +1348,45 @@ char *expand(str *input){
                 size_t after_start = i;
 
                 size_t after_brace = 1;
-                while (input->arr[i] != '\0'){
-                    if (input->arr[i] == '}'){
-                        after_brace--;
-                    }else if(input->arr[i] == '{'){
-                        after_brace++;
-                    }if(after_brace == 0){
-                        break;
-                    }
-                    i--;
+                bool after_did_not_reach_end = false;
+               while (input->arr[i] != '\0'){
+                    if (input->arr[i] == '\\') {
+                            size_t backslash_count = 0;
+                            while (i >= 0 && input->arr[i] == '\\') {
+                                backslash_count++;
+                                i--;
+                            }
+                            
+                            if (backslash_count % 2 == 0) {
+                                if (input->arr[i] == '{') {
+                                   after_brace++; 
+                                } else if (input->arr[i] == '}') {
+                                  after_brace--;  
+                                }
+                            } else {
+                                //do nothing
+                            }
+
+                        // {escape\{}
+                        } else if (input->arr[i] == '{') {
+                            after_brace++;
+                        } else if (input->arr[i] == '}') {
+                            after_brace--;
+                        }
+
+                    
+                        if (after_brace == 0) {
+                            break;
+                        }
+
+                        if (i == 0) {
+                            after_did_not_reach_end = true;
+                            break;
+                        }
+                        i--;  
                 }
 
-                if (input->arr[i] != '}'){
+                if (after_did_not_reach_end || input->arr[i] != '}'){
                     DIE("expected }, found '%#x'\n", input->arr[i]);
                 }
 
@@ -1158,9 +1440,20 @@ char *expand(str *input){
 
             case COMMENT:
                 // Skip over the comment until the end of the line
-                while (i < input_len && input->arr[i] != '\n') {
-                    i--;
+                while (i >= 0 && input->arr[i] != '\n' && input->arr[i] != '\0') {
+                    i--;  // Skip over the content of the comment
                 }
+
+                // If we encounter a newline, move past it so the next line can be processed
+                if (i >= 0 && input->arr[i] == '\n') {
+                    i--;  // Move past the newline character
+                }
+
+                // After the comment, skip any leading whitespace (spaces, tabs)
+                while (i >= 0 && (input->arr[i] == ' ' || input->arr[i] == '\t')) {
+                    i--;  // Skip whitespace characters
+                }
+
                 state = NORMAL;  // Return to NORMAL state after comment
                 break;
 
