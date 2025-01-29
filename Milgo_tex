@@ -63,6 +63,18 @@ str* read_file(const char *filename) {
 
     fseek(file, 0, SEEK_END);  // Move pointer to EOF
     long file_size = ftell(file);  // Get size of the file
+        if (file_size == 0) {  // Handle empty file case
+        fclose(file);
+        str *empty_str = calloc(1, sizeof(str));
+        if (!empty_str) {
+            perror("Memory allocation failed");
+            exit(EXIT_FAILURE);
+        }
+        empty_str->arr = calloc(1, sizeof(char));  // Allocate empty string
+        empty_str->size = 0;
+        empty_str->capacity = 1;
+        return empty_str;
+    }
     fseek(file, 0, SEEK_SET);  // Move pointer back to the beginning
 
     str *input = calloc(1, sizeof(str));
@@ -121,6 +133,7 @@ str* read_input(FILE *input_stream) {
         input->arr[i++] = ch;
     }
 
+    input->arr[i] = '\0';
     input->size = i;
     return input;
 }
@@ -141,8 +154,12 @@ int is_escaped(const char* input, size_t idx) {
 
 // Function to remove comments and skip whitespace
 char* remove_comments(const char* input) {
+    if (!input) {
+        fprintf(stderr, "Error: NULL input received in remove_comments()\n");
+        return NULL;
+    }
     size_t length = strlen(input);
-    char* result = malloc(length + 1);  // Allocate memory for the resulting string
+    char* result = malloc(length + 2);  // Allocate memory for the resulting string
     if (!result) {
         perror("Memory allocation failed");
         exit(EXIT_FAILURE);
@@ -189,13 +206,7 @@ char* remove_comments(const char* input) {
     return result;
 }
 
-// int main() {
-//     const char* input = "\\def{Ro\\\\\\\\\\\\\\%n\nc                               }{milgo}\\% this is a comment\nExample text!";
-//     char* output = remove_comments(input);
-//     printf("Processed string: %s\n", output);
-//     free(output);  // Don't forget to free the allocated memory
-//     return 0;
-// }
+
 
 str *create_str_from_char(const char *input) {
     str *new_str = malloc(sizeof(str));
@@ -240,11 +251,10 @@ int main(int argc, char **argv) {
 
     // Handle file or stdin input
     if (argc == 1) {
-        // If no file is provided, check for stdin redirection
-        str *new_input = read_input(stdin);  // Use your read_input function to handle stdin
-        free(input->arr);  // Free the old input's array
-        free(input);       // Free the old input structure
-        input = new_input; // Assign the new input to the old one
+        str *new_input = read_input(stdin);
+        free(input->arr); 
+        free(input);  
+        input = new_input;
     } else {
         // Process file inputs
         for (int i = 1; i < argc; i++) {
