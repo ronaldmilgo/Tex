@@ -29,8 +29,8 @@ void reverse_str(char *str);
 
 
 
-void resize(str *input) {
-    input->capacity *= 2;
+void resize(str *input, size_t value) {
+    input->capacity *= (2 * value);
     input->arr = realloc(input->arr, input->capacity * sizeof(char));
     if (!input->arr) {
         perror("Memory reallocation failed");
@@ -47,7 +47,6 @@ typedef enum{
     UNDEF,
     IF,
     ESCAPE,
-    COMMENT,
     IFDEF,
     EXPANDAFTER,
     INCLUDE
@@ -126,6 +125,111 @@ str* read_input(FILE *input_stream) {
     return input;
 }
 
+
+
+int is_escaped(const char* input, size_t idx) {
+    int backslash_count = 0;
+    // Count the number of backslashes before the % symbol
+    while (idx > 0 && input[idx - 1] == '\\') {
+        backslash_count++;
+        idx--;
+    }
+    // Return true if the number of backslashes is odd (escaped %)
+    return backslash_count % 2 != 0;
+}
+
+
+// Function to remove comments and skip whitespace
+char* remove_comments(const char* input) {
+    size_t length = strlen(input);
+    char* result = malloc(length + 1);  // Allocate memory for the resulting string
+    if (!result) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t j = 0;  // Index for result
+    size_t i = 0;  // Index for input string
+
+    while (i < length) {
+        // Check if we encounter a '%' and it's not escaped
+        if (input[i] == '%' && !is_escaped(input, i)) {
+            // Skip the comment: move until the newline is found
+            while (i < length && input[i] != '\n') {
+                i++;  // Skip characters until we find the newline character
+            }
+
+            // After the comment, skip any leading whitespaces or tabs
+            int count_new_line = 0;
+            if (input[i] =='\n'){
+                count_new_line++;
+            }
+            while (i < length && (input[i] == ' ' || input[i] == '\t' || count_new_line == 1)) {
+                if (input[i] =='\n'){
+                    count_new_line++;
+                }
+                i++;  // Skip spaces, tabs, and newline
+            }
+
+            continue;  // Move to the next iteration after skipping the comment
+        }
+
+        // Handle escaped '%' characters by treating them as normal characters
+        if (input[i] == '%' && is_escaped(input, i)) {
+            result[j++] = input[i];  // Add the '%' to the result as it's escaped
+            i++;  // Move to the next character
+            continue;
+        }
+
+        // Copy the current character to the result
+        result[j++] = input[i++];
+    }
+
+    result[j] = '\0';  // Null-terminate the result string
+    return result;
+}
+
+// int main() {
+//     const char* input = "\\def{Ro\\\\\\\\\\\\\\%n\nc                               }{milgo}\\% this is a comment\nExample text!";
+//     char* output = remove_comments(input);
+//     printf("Processed string: %s\n", output);
+//     free(output);  // Don't forget to free the allocated memory
+//     return 0;
+// }
+
+str *create_str_from_char(const char *input) {
+    str *new_str = malloc(sizeof(str));
+    if (!new_str) {
+        perror("Memory allocation failed for str struct");
+        exit(EXIT_FAILURE);
+    }
+
+    new_str->size = strlen(input);
+    new_str->capacity = new_str->size + 1;
+    new_str->arr = malloc(new_str->capacity * sizeof(char));
+
+    if (!new_str->arr) {
+        perror("Memory allocation failed for str array");
+        exit(EXIT_FAILURE);
+    }
+
+    strncpy(new_str->arr, input, new_str->size);
+    new_str->arr[new_str->size] = '\0'; // Null terminate
+
+    return new_str;
+}
+
+
+
+
+// int main() {
+//     const char* input = "\\def{Ro\\\\\\\\\\\\\\%n\nc                               }{milgo}\\% this is a comment\nExample text!";
+//     char* output = remove_comments(input);
+//     printf("Processed string: %s\n", output);
+//     free(output);  // Don't forget to free the allocated memory
+//     return 0;
+// }
+
 int main(int argc, char **argv) {
     // Allocate memory for input structure
     str *input = calloc(1, sizeof(str));
@@ -165,23 +269,34 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Remove comments and skip whitespace
+    char *clean_input_arr = remove_comments(input->arr);
+
+    // Create a new str struct from the cleaned input string
+    str *clean_input = create_str_from_char(clean_input_arr);
+
     // Ensure proper memory management after reading input
-    if (input->size > 0) {
-        if (input->arr != NULL && strlen(input->arr) > 0) {
-            reverse_str(input->arr);
+    if (clean_input->size > 0) {
+        if (clean_input->arr != NULL && strlen(clean_input->arr) > 0) {
+            reverse_str(clean_input->arr);  // Reverse if required
         }
-        char *expanded = expand(input);
+        char *expanded = expand(clean_input);  // Expanding the input string
         printf("%s", expanded);  // Output the expanded result
         free(expanded);  // Free the allocated memory for the expanded string
     }
 
     // Free allocated memory for input structure and its array
-    free(input->arr);
-    free(input);  // This frees the memory allocated for the input structure
-    free_macro_list();
+    free(clean_input_arr);  // Free the cleaned input array
+    free(input->arr);       // Free original input array
+    free(input);            // Free the input struct
+    free(clean_input->arr); // Free cleaned input string array
+    free(clean_input);      // Free cleaned input struct
+    free_macro_list();      // Clean up any macro list if required
 
     return 0;
 }
+
+
 
 
 
@@ -377,27 +492,7 @@ Result has_non_alphanumeric(const char *str) {
     }
     return result;  
 }
-str *create_str_from_char(const char *input) {
-    str *new_str = malloc(sizeof(str));
-    if (!new_str) {
-        perror("Memory allocation failed for str struct");
-        exit(EXIT_FAILURE);
-    }
 
-    new_str->size = strlen(input);
-    new_str->capacity = new_str->size + 1;
-    new_str->arr = malloc(new_str->capacity * sizeof(char));
-
-    if (!new_str->arr) {
-        perror("Memory allocation failed for str array");
-        exit(EXIT_FAILURE);
-    }
-
-    strncpy(new_str->arr, input, new_str->size);
-    new_str->arr[new_str->size] = '\0'; // Null terminate
-
-    return new_str;
-}
 
 char *include_macro(const char *path) {
     str *read = read_file(path);
@@ -455,8 +550,8 @@ char *expand(str *input){
                     } else{
                         expanded[j++] = '\\';
                     }
-                }else if (input->arr[i] == '%'){
-                    state = COMMENT;
+                // }else if (input->arr[i] == '%'){
+                //     state = COMMENT;
                 }else{
                     //treat as regular char
                     if (j >= input_len){
@@ -589,7 +684,7 @@ char *expand(str *input){
                         size_t space = input->size - i;
                         size_t added_length = expanded_length - space;
                         if (expanded_length > space){
-                            resize(input);
+                            resize(input, expanded_length);
                             input->size += added_length;
                         }
                         // printf("BEFORE, %i\n", i);
@@ -992,7 +1087,7 @@ char *expand(str *input){
                 size_t if_space = input->size - i;
                 size_t added_length = if_expanded_length - if_space;
                 if (if_expanded_length > if_space){
-                    resize(input);
+                    resize(input, if_expanded_length);
                     input->size += added_length;
                 }
                 for(size_t x = 0; x < if_expanded_length; x++){
@@ -1169,7 +1264,7 @@ char *expand(str *input){
                 size_t ifdef_space = input->size - i;
                 size_t add_length = pick_length - ifdef_space;
                 if (pick_length > ifdef_space){
-                    resize(input);
+                    resize(input, pick_length);
                     input->size += add_length;
                 }
                 for(size_t x = 0; x < pick_length; x++){
@@ -1265,7 +1360,7 @@ char *expand(str *input){
                 size_t include_space = input->size - i;
                 size_t plus_length = content_length - include_space;
                 if (content_length > include_space){
-                    resize(input);
+                    resize(input, content_length);
                     input->size += plus_length;
                 }
                 for(size_t x = 0; x < content_length; x++){
@@ -1412,7 +1507,7 @@ char *expand(str *input){
                 size_t _space = input->size - i;
                 size_t _added_length = _expanded_length - _space;
                 if (_expanded_length > _space){
-                    resize(input);
+                    resize(input, _expanded_length);
                     input->size += _added_length;
                 }
                 for(size_t x = 0; x < strlen(expanded_after); x++){
@@ -1438,24 +1533,24 @@ char *expand(str *input){
                 state = NORMAL;
                 break;
 
-            case COMMENT:
-                // Skip over the comment until the end of the line
-                while (i >= 0 && input->arr[i] != '\n' && input->arr[i] != '\0') {
-                    i--;  // Skip over the content of the comment
-                }
+            // case COMMENT:
+            //     // Skip over the comment until the end of the line
+            //     while (i >= 0 && input->arr[i] != '\n' && input->arr[i] != '\0') {
+            //         i--;  // Skip over the content of the comment
+            //     }
 
-                // If we encounter a newline, move past it so the next line can be processed
-                if (i >= 0 && input->arr[i] == '\n') {
-                    i--;  // Move past the newline character
-                }
+            //     // If we encounter a newline, move past it so the next line can be processed
+            //     if (i >= 0 && input->arr[i] == '\n') {
+            //         i--;  // Move past the newline character
+            //     }
 
-                // After the comment, skip any leading whitespace (spaces, tabs)
-                while (i >= 0 && (input->arr[i] == ' ' || input->arr[i] == '\t')) {
-                    i--;  // Skip whitespace characters
-                }
+            //     // After the comment, skip any leading whitespace (spaces, tabs)
+            //     while (i >= 0 && (input->arr[i] == ' ' || input->arr[i] == '\t')) {
+            //         i--;  // Skip whitespace characters
+            //     }
 
-                state = NORMAL;  // Return to NORMAL state after comment
-                break;
+            //     state = NORMAL;  // Return to NORMAL state after comment
+            //     break;
 
             // case BRACE:
             //     // Handle braces and check for balance
