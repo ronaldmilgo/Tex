@@ -61,21 +61,21 @@ str* read_file(const char *filename) {
         exit(EXIT_FAILURE);
     }
 
-    fseek(file, 0, SEEK_END);  // Move pointer to EOF
-    long file_size = ftell(file);  // Get size of the file
-        if (file_size == 0) {  // Handle empty file case
+    fseek(file, 0, SEEK_END); 
+    long file_size = ftell(file); 
+        if (file_size == 0) {  
         fclose(file);
         str *empty_str = calloc(1, sizeof(str));
         if (!empty_str) {
             perror("Memory allocation failed");
             exit(EXIT_FAILURE);
         }
-        empty_str->arr = calloc(1, sizeof(char));  // Allocate empty string
+        empty_str->arr = calloc(1, sizeof(char));  
         empty_str->size = 0;
         empty_str->capacity = 1;
         return empty_str;
     }
-    fseek(file, 0, SEEK_SET);  // Move pointer back to the beginning
+    fseek(file, 0, SEEK_SET); 
 
     str *input = calloc(1, sizeof(str));
     if (!input) {
@@ -84,7 +84,7 @@ str* read_file(const char *filename) {
     }
 
     // Initialize struct fields
-    input->arr = calloc(file_size + 1, sizeof(char));  // Allocate memory for the file content
+    input->arr = calloc(file_size + 1, sizeof(char));  
     input->size = 0;
     input->capacity = file_size + 1;
 
@@ -147,12 +147,9 @@ int is_escaped(const char* input, size_t idx) {
         backslash_count++;
         idx--;
     }
-    // Return true if the number of backslashes is odd (escaped %)
     return backslash_count % 2 != 0;
 }
 
-
-// Function to remove comments and skip whitespace
 char* remove_comments(const char* input) {
     if (!input) {
         fprintf(stderr, "Error: NULL input received in remove_comments()\n");
@@ -165,18 +162,15 @@ char* remove_comments(const char* input) {
         exit(EXIT_FAILURE);
     }
 
-    size_t j = 0;  // Index for result
-    size_t i = 0;  // Index for input string
+    size_t j = 0;  
+    size_t i = 0;
 
     while (i < length) {
-        // Check if we encounter a '%' and it's not escaped
         if (input[i] == '%' && !is_escaped(input, i)) {
-            // Skip the comment: move until the newline is found
             while (i < length && input[i] != '\n') {
-                i++;  // Skip characters until we find the newline character
+                i++;  
             }
 
-            // After the comment, skip any leading whitespaces or tabs
             int count_new_line = 0;
             if (input[i] =='\n'){
                 count_new_line++;
@@ -185,28 +179,26 @@ char* remove_comments(const char* input) {
                 if (input[i] =='\n'){
                     count_new_line++;
                 }
-                i++;  // Skip spaces, tabs, and newline
+                i++;  
             }
 
-            continue;  // Move to the next iteration after skipping the comment
+            continue; 
         }
 
-        // Handle escaped '%' characters by treating them as normal characters
+        
         if (input[i] == '%' && is_escaped(input, i)) {
-            result[j++] = input[i];  // Add the '%' to the result as it's escaped
-            i++;  // Move to the next character
+            result[j++] = input[i];  
+            i++; 
             continue;
         }
 
-        // Copy the current character to the result
+
         result[j++] = input[i++];
     }
 
-    result[j] = '\0';  // Null-terminate the result string
+    result[j] = '\0';  
     return result;
 }
-
-
 
 str *create_str_from_char(const char *input) {
     str *new_str = malloc(sizeof(str));
@@ -230,16 +222,6 @@ str *create_str_from_char(const char *input) {
     return new_str;
 }
 
-
-
-
-// int main() {
-//     const char* input = "\\def{Ro\\\\\\\\\\\\\\%n\nc                               }{milgo}\\% this is a comment\nExample text!";
-//     char* output = remove_comments(input);
-//     printf("Processed string: %s\n", output);
-//     free(output);  // Don't forget to free the allocated memory
-//     return 0;
-// }
 
 int main(int argc, char **argv) {
     // Allocate memory for input structure
@@ -279,30 +261,26 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Remove comments and skip whitespace
     char *clean_input_arr = remove_comments(input->arr);
 
-    // Create a new str struct from the cleaned input string
     str *clean_input = create_str_from_char(clean_input_arr);
 
-    // Ensure proper memory management after reading input
+  
     if (clean_input->size > 0) {
         if (clean_input->arr != NULL && strlen(clean_input->arr) > 0) {
-            reverse_str(clean_input->arr);  // Reverse if required
+            reverse_str(clean_input->arr); 
         }
-        char *expanded = expand(clean_input);  // Expanding the input string
-        printf("%s", expanded);  // Output the expanded result
-        free(expanded);  // Free the allocated memory for the expanded string
+        char *expanded = expand(clean_input);  
+        printf("%s", expanded);  
+        free(expanded);  
     }
 
-    // Free allocated memory for input structure and its array
-    free(clean_input_arr);  // Free the cleaned input array
-    free(input->arr);       // Free original input array
-    free(input);            // Free the input struct
-    free(clean_input->arr); // Free cleaned input string array
-    free(clean_input);      // Free cleaned input struct
-    free_macro_list();      // Clean up any macro list if required
-
+    free(clean_input_arr);  
+    free(input->arr);    
+    free(input);            
+    free(clean_input->arr); 
+    free(clean_input);   
+    free_macro_list();     
     return 0;
 }
 
@@ -467,23 +445,6 @@ void reverse_str(char *str){
 
 }
 
-bool has_unescaped_comment(const char *str) {
-    int backslash_count = 0;  
-    for (int i = 0; str[i] != '\0'; i++) {
-        if (str[i] == '\\') {
-            backslash_count++;
-        } else if (str[i] == '%') {
-            if (backslash_count % 2 == 0) {
-                return true;  // Unescaped comment found
-            }
-            backslash_count = 0;
-        } else {
-            backslash_count = 0;
-        }
-    }
-
-    return false;  // No unescaped comment found
-}
 
 typedef struct {
     bool has_non_alphanumeric; 
@@ -513,11 +474,8 @@ char *include_macro(const char *path) {
         exit(EXIT_FAILURE);
     }
 
-    // Copy the contents of the file into the string
     strncpy(contents, read->arr, read->size);
     contents[read->size] = '\0';
-
-    // Don't forget to free any dynamically allocated memory in file_contents if needed
     free(read->arr);
     free(read);
 
@@ -560,8 +518,6 @@ char *expand(str *input){
                     } else{
                         expanded[j++] = '\\';
                     }
-                // }else if (input->arr[i] == '%'){
-                //     state = COMMENT;
                 }else{
                     //treat as regular char
                     if (j >= input_len){
@@ -662,7 +618,6 @@ char *expand(str *input){
                                 arg_brace--;
                             }
 
-                            // If braces are balanced, break the loop
                             if (arg_brace == 0) {
                                 break;
                             }
@@ -671,7 +626,7 @@ char *expand(str *input){
                                 did_not_reach_end = true;
                                 break;
                             }
-                            i--;  // Move backward to process the next character
+                            i--;  
                         }
 
 
@@ -684,9 +639,7 @@ char *expand(str *input){
                         strncpy(argument, &input->arr[i + 1], arg_len);
                         reverse_str(argument);
                         argument[arg_len] = '\0';
-                        if(has_unescaped_comment(argument)){
-                            DIE("expected }, found '%#x'", input->arr[i]);
-                        }
+                       
 
                         char *expanded_macro_val = expand_macro_val(macro_val, argument); 
                         reverse_str(expanded_macro_val);
@@ -778,9 +731,6 @@ char *expand(str *input){
                strncpy(name, &input->arr[i + 1], def_name_len);
                reverse_str(name);
                name[def_name_len] = '\0';
-               if(has_unescaped_comment(name)){
-                DIE("expected }, found '%#x'", input->arr[i]);
-               }
                
                Result non_alphanumeric = has_non_alphanumeric(name);
                if(non_alphanumeric.has_non_alphanumeric){
@@ -844,9 +794,6 @@ char *expand(str *input){
                     DIE("expected }, found '%#x", input->arr[i]);
                 }
 
-            //    while (input[i] != '}'){
-            //     i++;
-            //    }
                size_t value_len = value_start - i;
 
                char *value = calloc((value_len + 1), sizeof(char));
@@ -858,9 +805,6 @@ char *expand(str *input){
                strncpy(value, &input->arr[i + 1], value_len);
                reverse_str(value);
                value[value_len] = '\0';
-               if(has_unescaped_comment(value)){
-                DIE("expected }, found '%#x'", input->arr[i]);
-               }
                def_macro(name, value);
 
                free(name);
@@ -891,12 +835,6 @@ char *expand(str *input){
                 undef_name[undef_name_len] = '\0';
 
                 i--; //skip closing brace
-                // size_t skip = 0;
-                // while (skip < (undef_name_len + 8)){
-                //     strcat(expanded, " ");
-                //     skip++;
-                //     j++;
-                // }
                 undef_macro(undef_name);
                 free(undef_name);
                 state = NORMAL;
@@ -1283,16 +1221,6 @@ char *expand(str *input){
                 }
                 i--;//beginning of currently expanded
                 
-                // if (ifdef_macro_val){
-                //     pick = ifdef_then;
-                // }else{
-                //     pick = ifdef_else_;
-                // }
-
-                // char *expand_rec = expand(pick);
-                // i--;
-                // strcat(expanded, expand_rec);
-                // j += strlen(expand_rec);
                 free(ifdef_then);
                 free(ifdef_else_);
 
@@ -1359,9 +1287,6 @@ char *expand(str *input){
                 path[path_len] = '\0';
                 reverse_str(path);
 
-                if(has_unescaped_comment(path)){
-                    DIE("expected }, found '%#x'", input->arr[i]);
-                }
 
                 char *path_content = include_macro(path);
                 reverse_str(path_content);
@@ -1542,46 +1467,9 @@ char *expand(str *input){
             
                 state = NORMAL;
                 break;
-
-            // case COMMENT:
-            //     // Skip over the comment until the end of the line
-            //     while (i >= 0 && input->arr[i] != '\n' && input->arr[i] != '\0') {
-            //         i--;  // Skip over the content of the comment
-            //     }
-
-            //     // If we encounter a newline, move past it so the next line can be processed
-            //     if (i >= 0 && input->arr[i] == '\n') {
-            //         i--;  // Move past the newline character
-            //     }
-
-            //     // After the comment, skip any leading whitespace (spaces, tabs)
-            //     while (i >= 0 && (input->arr[i] == ' ' || input->arr[i] == '\t')) {
-            //         i--;  // Skip whitespace characters
-            //     }
-
-            //     state = NORMAL;  // Return to NORMAL state after comment
-            //     break;
-
-            // case BRACE:
-            //     // Handle braces and check for balance
-            //     if (input[i] == '{') {
-            //         count_brace++;
-            //     } else if (input[i] == '}') {
-            //         count_brace--;
-            //     }
-
-            //     expanded[j++] = input[i++];
-            //     if (count_brace == 0) {
-            //         state = NORMAL;  // Return to NORMAL state when braces are balanced
-            //     }
-            //     break;
-
-
         }
     }
     expanded[j] = '\0';
     return expanded;
 }
-
-
 
