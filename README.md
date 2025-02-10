@@ -14,7 +14,7 @@ Comment Removal: The program can process comments, which start with a % symbol a
 
 Input Processing: The program can read input from files or from standard input. It handles input redirection (<), so users can easily process files without manually providing input each time.
 
-**Key Features:
+#Key Features:
 Macro Definition: \def{MACRO}{VALUE}
 Comment Handling: Skips over comments that start with %, but only if the % is not escaped.
 Whitespace Handling: When processing comments, the program also ignores spaces, tabs, and newlines until it finds the next non-blank character.
