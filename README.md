@@ -1,10 +1,10 @@
 # Macro Expander
 The Macro Expander project is a C-based program designed to process and expand macros in text files. It reads input strings, processes them for user-defined macros, handles escaped characters, and removes comments. The project provides functionality to handle macro definitions, macro replacements, and processes complex use cases such as handling escaped characters in macros and removing comments effectively.
 
-Project Overview
+## Project Overview
 In many programming and text-processing environments, macros are used to define reusable expressions or functions that can be expanded in place. This project implements a macro expander that simulates such behavior for text input, supporting the following features:
 
-Macro Definitions: You can define macros using the \def syntax, followed by the macro name and the macro value in curly braces {}. Macros can be expanded multiple times across the input text.
+- * Macro Definitions: You can define macros using the \def syntax, followed by the macro name and the macro value in curly braces {}. Macros can be expanded multiple times across the input text.
 
 Macro Expansions: Once defined, macros are automatically expanded when encountered in the input text. The program replaces occurrences of the macro names with their corresponding values.
 
