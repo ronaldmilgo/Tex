@@ -1,4 +1,4 @@
-#Macro Expander
+# Macro Expander
 The Macro Expander project is a C-based program designed to process and expand macros in text files. It reads input strings, processes them for user-defined macros, handles escaped characters, and removes comments. The project provides functionality to handle macro definitions, macro replacements, and processes complex use cases such as handling escaped characters in macros and removing comments effectively.
 
 Project Overview
